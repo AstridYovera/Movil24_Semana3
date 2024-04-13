@@ -2,17 +2,15 @@ package com.example.semana02;
 
 import android.os.Bundle;
 import android.view.View;
-import android.widget.ArrayAdapter;
 import android.widget.Button;
-import android.widget.Spinner;
-import android.widget.TextView;
+import android.widget.ListView;
+import android.widget.Toast;
 
-import androidx.activity.EdgeToEdge;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
 
+import com.example.semana02.adapter.UserAdapter;
+import com.example.semana02.entity.Address;
 import com.example.semana02.entity.User;
 import com.example.semana02.service.ServiceUser;
 import com.example.semana02.util.ConnectionRest;
@@ -26,91 +24,79 @@ import retrofit2.Response;
 
 public class MainActivity extends AppCompatActivity {
 
-    Spinner   spnUsuarios;
-    ArrayAdapter<String> adaptadorUsuarios;
-    ArrayList<String> listaUsuarios = new ArrayList<String>();
+    // Variables de la vista
+    ListView lstUser;
+    Button btnFiltrar;
 
-    Button   btnFiltrar;
-    TextView txtResultado;
+    // Lista de usuarios y adaptador
+    ArrayList<User> listaUser = new ArrayList<>();
+    UserAdapter userAdapter;
 
-    //conecta al servicio REST
+    // Servicio REST
     ServiceUser serviceUser;
-
-    private List<User> listaTotalUsuarios;
-
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main);
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
-            Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
-            return insets;
-        });
 
-        //Relaciona las variables con las variables de la GUI
-        adaptadorUsuarios = new ArrayAdapter<String>(
-                this,
-                androidx.appcompat.R.layout.support_simple_spinner_dropdown_item,
-                listaUsuarios);
-        spnUsuarios = findViewById(R.id.spnUsuarios);
-        spnUsuarios.setAdapter(adaptadorUsuarios);
-
+        // Inicialización de variables de la vista
+        lstUser = findViewById(R.id.lstUsuarios);
         btnFiltrar = findViewById(R.id.btnFiltrar);
-        txtResultado = findViewById(R.id.txtResultado);
 
-        //Conecta al servicio REST
+        // Inicialización del adaptador
+        userAdapter = new UserAdapter(this, R.layout.user_item, listaUser);
+        lstUser.setAdapter(userAdapter);
+
+        // Inicialización del servicio REST
         serviceUser = ConnectionRest.getConnecion().create(ServiceUser.class);
 
-        cargaUsuarios();
+        // Acción del botón "Filtrar"
+        btnFiltrar.setOnClickListener(v -> cargaUsuarios());
 
-        btnFiltrar.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                String item = spnUsuarios.getSelectedItem().toString();
-                int position = spnUsuarios.getSelectedItemPosition();
-                String id = item.split("-")[0];
-                String nombre = item.split("-")[1];
-
-                User objUserSeleccionado = listaTotalUsuarios.get(position);
-
-                String salida =  "Users: \n\n";
-                salida +=  "Position  " + position +"\n";
-                salida +=  "Id  " + id +"\n";
-                salida +=  "Name  " + nombre +"\n";
-                salida +=  "UserName  " + objUserSeleccionado.getUsername() +"\n";
-                salida +=  "Email  " + objUserSeleccionado.getEmail() +"\n";
-                salida +=  "Phone  " + objUserSeleccionado.getPhone() +"\n";
-
-                txtResultado.setText(salida);
-
-            }
+        // Acción al hacer clic en un usuario
+        lstUser.setOnItemClickListener((parent, view, position, id) -> {
+            User selectedUser = listaUser.get(position);
+            showAddressDialog(selectedUser.getAddress());
         });
-
-
     }
 
-    void cargaUsuarios(){
+    // Método para cargar usuarios desde el servicio REST
+    void cargaUsuarios() {
         Call<List<User>> call = serviceUser.listausuarios();
         call.enqueue(new Callback<List<User>>() {
             @Override
             public void onResponse(Call<List<User>> call, Response<List<User>> response) {
-                   if (response.isSuccessful()){
-                       listaTotalUsuarios = response.body();
-                       for(User x:listaTotalUsuarios){
-                           listaUsuarios.add(x.getId() + " - " + x.getName());
-                       }
-                       adaptadorUsuarios.notifyDataSetChanged();
-                   }
+                if (response.isSuccessful()) {
+                    listaUser.clear();
+                    listaUser.addAll(response.body());
+                    userAdapter.notifyDataSetChanged();
+                }
             }
+
             @Override
             public void onFailure(Call<List<User>> call, Throwable t) {
-
+                Toast.makeText(MainActivity.this, "Error al cargar usuarios", Toast.LENGTH_SHORT).show();
             }
         });
-
     }
 
+    // Método para mostrar los detalles de la dirección en un diálogo
+    private void showAddressDialog(Address address) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
+        builder.setTitle("Dirección");
+
+        if (address != null) {
+            String message = "Calle: " + address.getStreet() + "\n" +
+                    "Suite: " + address.getSuite() + "\n" +
+                    "Ciudad: " + address.getCity() + "\n" +
+                    "Código Postal: " + address.getZipcode();
+            builder.setMessage(message);
+        } else {
+            builder.setMessage("Dirección no disponible");
+        }
+
+        builder.setPositiveButton("Cerrar", (dialog, which) -> dialog.dismiss());
+        builder.show();
+    }
 }
